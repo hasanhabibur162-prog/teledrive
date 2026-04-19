@@ -24,7 +24,6 @@ export default async function handler(req, res) {
   const firstName = message.from?.first_name || "বন্ধু";
   const userId = message.from?.id;
 
-  // গ্রুপে মেসেজ হ্যান্ডলিং
   if (chatType === "group" || chatType === "supergroup") {
     const isCommand = text.startsWith("/");
     const isMentioned = text.toLowerCase().includes(`@${BOT_USERNAME.toLowerCase()}`);
@@ -43,7 +42,6 @@ export default async function handler(req, res) {
     return res.status(200).send("ok");
   }
 
-  // প্রাইভেট চ্যাট
   await processMessage(BOT_TOKEN, GEMINI_API_KEY, APP_URL, chatId, text, firstName, userId);
   return res.status(200).send("ok");
 }
@@ -72,20 +70,19 @@ async function processMessage(BOT_TOKEN, GEMINI_API_KEY, APP_URL, chatId, text, 
     const aiReply = await askGemini(GEMINI_API_KEY, text, firstName);
     await sendMessage(BOT_TOKEN, chatId, aiReply);
   } catch (e) {
-    console.error("AI Error:", e.message);
     await sendMessage(BOT_TOKEN, chatId, "❌ AI reply করতে পারেনি। একটু পরে try করো।");
   }
 }
 
 async function askGemini(apiKey, userMessage, firstName) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
   
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{
-        parts: [{ text: `তুমি একজন সহায়ক AI। ইউজারের নাম ${firstName}। বাংলায় উত্তর দাও। প্রশ্ন: ${userMessage}` }]
+        parts: [{ text: `তুমি একজন সহায়ক AI। ইউজারের নাম ${firstName}। সংক্ষেপে উত্তর দাও: ${userMessage}` }]
       }]
     })
   });
@@ -93,7 +90,7 @@ async function askGemini(apiKey, userMessage, firstName) {
   const data = await response.json();
   const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
   
-  if (!reply) throw new Error("No reply from Gemini");
+  if (!reply) throw new Error("No reply");
   return reply.trim();
 }
 
