@@ -84,7 +84,8 @@ async function getGeminiReply(apiKey, userMessage, firstName) {
   }
 
   try {
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=" + apiKey;
+    // এখানে মডেল পরিবর্তন করা হয়েছে - gemini-1.5-flash ব্যবহার করা হচ্ছে
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
     
     const requestBody = {
       contents: [
