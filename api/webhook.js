@@ -1,19 +1,13 @@
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(200).send("OK");
-  }
+  if (req.method !== "POST") return res.status(200).send("OK");
 
   const BOT_TOKEN = process.env.BOT_TOKEN;
   const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
   const APP_URL = process.env.APP_URL || "https://teledrive-wine.vercel.app";
-  const BOT_USERNAME = (process.env.BOT_USERNAME || "Syleax_bot").toLowerCase();
 
   let body;
-  try {
-    body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-  } catch {
-    return res.status(200).send("ok");
-  }
+  try { body = typeof req.body === "string" ? JSON.parse(req.body) : req.body; }
+  catch { return res.status(200).send("ok"); }
 
   const message = body?.message;
   if (!message || !message.chat) return res.status(200).send("ok");
@@ -23,16 +17,26 @@ export default async function handler(req, res) {
   const text = (message.text || "").trim();
   const firstName = message.from?.first_name || "বন্ধু";
 
+  // GROUP হ্যান্ডলিং
   if (chatType === "group" || chatType === "supergroup") {
+    const textLower = text.toLowerCase();
     const isCommand = text.startsWith("/");
-    const isMentioned = text.toLowerCase().includes(`@${BOT_USERNAME}`);
+    const isMentioned = textLower.includes("@syleax_bot") || textLower.includes("syleax");
+
+    // group-এ mention বা command ছাড়া ignore করো
     if (!isCommand && !isMentioned) return res.status(200).send("ok");
-    let cleanText = text.replace(new RegExp(`@${BOT_USERNAME}`, "gi"), "").trim();
-    if (!cleanText) cleanText = "হ্যালো";
+
+    // mention বাদ দিয়ে বাকি text নাও
+    const cleanText = text
+      .replace(/@syleax_bot/gi, "")
+      .replace(/syleax/gi, "")
+      .trim() || "হ্যালো";
+
     await processMessage(BOT_TOKEN, OPENROUTER_KEY, APP_URL, chatId, cleanText, firstName);
     return res.status(200).send("ok");
   }
 
+  // PRIVATE CHAT
   await processMessage(BOT_TOKEN, OPENROUTER_KEY, APP_URL, chatId, text, firstName);
   return res.status(200).send("ok");
 }
@@ -74,15 +78,16 @@ async function processMessage(token, apiKey, appUrl, chatId, text, firstName) {
 }
 
 async function getAIReply(apiKey, userMessage, firstName) {
-  if (!apiKey) return "🔑 API key সেট করা নেই।";
+  if (!apiKey) return "🔑 OpenRouter API key সেট নেই।";
 
   const models = [
     "meta-llama/llama-3.2-3b-instruct:free",
     "meta-llama/llama-3.1-8b-instruct:free",
     "google/gemma-2-9b-it:free",
+    "mistralai/mistral-7b-instruct:free",
   ];
 
-  const systemPrompt = `তুমি একজন সহায়ক AI assistant। ইউজারের নাম ${firstName}। বাংলায় বা ইংরেজিতে উত্তর দাও (user যে ভাষায় লিখবে)। উত্তর সংক্ষিপ্ত ও কাজের রাখো।`;
+  const systemPrompt = `তুমি একজন সহায়ক AI assistant। ইউজারের নাম ${firstName}। বাংলায় বা ইংরেজিতে উত্তর দাও। উত্তর সংক্ষিপ্ত রাখো।`;
 
   for (const model of models) {
     try {
@@ -108,12 +113,10 @@ async function getAIReply(apiKey, userMessage, firstName) {
       const data = await response.json();
       const reply = data?.choices?.[0]?.message?.content;
       if (reply && reply.trim()) return reply.trim();
-    } catch {
-      continue;
-    }
+    } catch { continue; }
   }
 
-  return `🙏 দুঃখিত ${firstName}, এখন উত্তর দিতে পারছি না। একটু পরে চেষ্টা করো।`;
+  return `🙏 দুঃখিত ${firstName}, এখন AI উত্তর দিতে পারছে না। একটু পরে চেষ্টা করো।`;
 }
 
 async function sendMessage(token, chatId, text) {
@@ -123,9 +126,7 @@ async function sendMessage(token, chatId, text) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text }),
     });
-  } catch (e) {
-    console.error("sendMessage error:", e);
-  }
+  } catch (e) { console.error("sendMessage error:", e); }
 }
 
 async function sendChatAction(token, chatId, action) {
@@ -135,7 +136,5 @@ async function sendChatAction(token, chatId, action) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, action }),
     });
-  } catch (e) {
-    console.error("sendChatAction error:", e);
-  }
+  } catch (e) { console.error("chatAction error:", e); }
 }
