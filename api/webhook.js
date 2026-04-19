@@ -23,7 +23,6 @@ export default async function handler(req, res) {
   const text = (message.text || "").trim();
   const firstName = message.from?.first_name || "বন্ধু";
 
-  // গ্রুপে মেসেজ হ্যান্ডলিং
   if (chatType === "group" || chatType === "supergroup") {
     const isCommand = text.startsWith("/");
     const isMentioned = text.toLowerCase().includes(`@${BOT_USERNAME.toLowerCase()}`);
@@ -35,6 +34,103 @@ export default async function handler(req, res) {
     let cleanText = text;
     if (isMentioned) {
       cleanText = text.replace(new RegExp(`@${BOT_USERNAME}`, "gi"), "").trim();
+      if (!cleanText && !isCommand) cleanText = "হ্যালো";
+    }
+    
+    await sendAIResponse(BOT_TOKEN, GEMINI_API_KEY, chatId, cleanText, firstName);
+    return res.status(200).send("ok");
+  }
+
+  await sendAIResponse(BOT_TOKEN, GEMINI_API_KEY, chatId, text, firstName);
+  return res.status(200).send("ok");
+}
+
+async function sendAIResponse(BOT_TOKEN, GEMINI_API_KEY, chatId, messageText, firstName) {
+  if (messageText === "/start") {
+    await sendMessage(BOT_TOKEN, chatId, `✈️ TeleDrive Bot-এ স্বাগতম, ${firstName}!\n\nআমি তোমার AI assistant।\n\n📁 /drive — TeleDrive app\n❓ /help — সব commands\n💬 যেকোনো প্রশ্ন করো!`);
+    return;
+  }
+
+  if (messageText === "/drive") {
+    await sendMessage(BOT_TOKEN, chatId, `🔗 TeleDrive App: ${APP_URL}`);
+    return;
+  }
+
+  if (messageText === "/help") {
+    await sendMessage(BOT_TOKEN, chatId, `📋 Commands:\n\n/start — শুরু করো\n/drive — App link\n/help — এই list\n\n💬 যেকোনো কিছু লিখলে AI উত্তর দেবে!\n👥 Group-এ @${BOT_USERNAME} mention করো`);
+    return;
+  }
+
+  await sendChatAction(BOT_TOKEN, chatId, "typing");
+  
+  const aiReply = await getGeminiReply(GEMINI_API_KEY, messageText, firstName);
+  await sendMessage(BOT_TOKEN, chatId, aiReply);
+}
+
+async function getGeminiReply(apiKey, userMessage, firstName) {
+  if (!apiKey) {
+    return "🔑 API key সেট করা নেই।";
+  }
+
+  try {
+    // এখানে মডেল নাম পরিবর্তন করা হয়েছে
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
+    
+    const requestBody = {
+      contents: [
+        {
+          parts: [
+            {
+              text: `তুমি একজন সহায়ক AI। ইউজারের নাম ${firstName}। বাংলায় উত্তর দাও। প্রশ্ন: ${userMessage}`
+            }
+          ]
+        }
+      ]
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody)
+    });
+
+    const data = await response.json();
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (reply && reply.trim()) {
+      return reply.trim();
+    } else {
+      return `দুঃখিত ${firstName}, উত্তর দিতে পারলাম না।`;
+    }
+    
+  } catch (error) {
+    return "❌ সার্ভারে সমস্যা। একটু পরে চেষ্টা করো।";
+  }
+}
+
+async function sendMessage(token, chatId, text) {
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+  } catch (error) {
+    console.error("Send message error:", error);
+  }
+}
+
+async function sendChatAction(token, chatId, action) {
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendChatAction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, action }),
+    });
+  } catch (error) {
+    console.error("Chat action error:", error);
+  }
+}      cleanText = text.replace(new RegExp(`@${BOT_USERNAME}`, "gi"), "").trim();
       if (!cleanText && !isCommand) cleanText = "হ্যালো";
     }
     
