@@ -23,28 +23,16 @@ export default async function handler(req, res) {
   const text = (message.text || "").trim();
   const firstName = message.from?.first_name || "বন্ধু";
 
-  // গ্রুপে মেসেজ হ্যান্ডলিং
   if (chatType === "group" || chatType === "supergroup") {
     const isCommand = text.startsWith("/");
     const isMentioned = text.toLowerCase().includes(`@${BOT_USERNAME}`);
-    
-    if (!isCommand && !isMentioned) {
-      return res.status(200).send("ok");
-    }
-    
-    let cleanText = text;
-    if (isMentioned) {
-      cleanText = text.replace(new RegExp(`@${BOT_USERNAME}`, "gi"), "").trim();
-      if (!cleanText && !isCommand) {
-        cleanText = "হ্যালো";
-      }
-    }
-    
+    if (!isCommand && !isMentioned) return res.status(200).send("ok");
+    let cleanText = text.replace(new RegExp(`@${BOT_USERNAME}`, "gi"), "").trim();
+    if (!cleanText) cleanText = "হ্যালো";
     await processMessage(BOT_TOKEN, OPENROUTER_KEY, APP_URL, chatId, cleanText, firstName);
     return res.status(200).send("ok");
   }
 
-  // প্রাইভেট চ্যাট
   await processMessage(BOT_TOKEN, OPENROUTER_KEY, APP_URL, chatId, text, firstName);
   return res.status(200).send("ok");
 }
@@ -53,7 +41,13 @@ async function processMessage(token, apiKey, appUrl, chatId, text, firstName) {
   if (!text) return;
 
   if (text === "/start") {
-    await sendMessage(token, chatId, `✈️ TeleDrive Bot-এ স্বাগতম, ${firstName}!\n\nআমি তোমার AI assistant।\n\n📁 /drive — TeleDrive app\n❓ /help — সব commands\n💬 যেকোনো প্রশ্ন করো!`);
+    await sendMessage(token, chatId,
+      `✈️ TeleDrive Bot-এ স্বাগতম, ${firstName}!\n\n` +
+      `আমি তোমার AI assistant।\n\n` +
+      `📁 /drive — TeleDrive app\n` +
+      `❓ /help — সব commands\n` +
+      `💬 যেকোনো প্রশ্ন করো!`
+    );
     return;
   }
 
@@ -63,59 +57,63 @@ async function processMessage(token, apiKey, appUrl, chatId, text, firstName) {
   }
 
   if (text === "/help") {
-    await sendMessage(token, chatId, `📋 Commands:\n\n/start — শুরু করো\n/drive — App link\n/help — এই list\n\n💬 যেকোনো কিছু লিখলে AI উত্তর দেবে!\n👥 Group-এ @${process.env.BOT_USERNAME || "Syleax_bot"} mention করো`);
+    await sendMessage(token, chatId,
+      `📋 Commands:\n\n` +
+      `/start — শুরু করো\n` +
+      `/drive — App link\n` +
+      `/help — এই list\n\n` +
+      `💬 যেকোনো কিছু লিখলে AI উত্তর দেবে!\n` +
+      `👥 Group-এ @Syleax_bot mention করো`
+    );
     return;
   }
 
   await sendChatAction(token, chatId, "typing");
-  
   const reply = await getAIReply(apiKey, text, firstName);
   await sendMessage(token, chatId, reply);
 }
 
 async function getAIReply(apiKey, userMessage, firstName) {
-  if (!apiKey) {
-    return "🔑 API key সেট করা নেই। অ্যাডমিনকে জানান।";
-  }
+  if (!apiKey) return "🔑 API key সেট করা নেই।";
 
-  try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://teledrive-wine.vercel.app",
-        "X-Title": "TeleDrive Bot"
-      },
-      body: JSON.stringify({
-        model: "mistralai/mistral-7b-instruct:free",
-        messages: [
-          {
-            role: "system",
-            content: `তুমি একজন সহায়ক AI। ইউজারের নাম ${firstName}। তুমি বাংলায় উত্তর দাও। উত্তর ছোট ও সাহায্যকারী হও।`
-          },
-          {
-            role: "user",
-            content: userMessage
-          }
-        ],
-        max_tokens: 500,
-        temperature: 0.7
-      })
-    });
+  const models = [
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "google/gemma-2-9b-it:free",
+  ];
 
-    const data = await response.json();
-    const reply = data?.choices?.[0]?.message?.content;
-    
-    if (reply && reply.trim()) {
-      return reply.trim();
-    } else {
-      return `🙏 দুঃখিত ${firstName}, আমি এখন উত্তর দিতে পারছি না। একটু পরে চেষ্টা করুন।`;
+  const systemPrompt = `তুমি একজন সহায়ক AI assistant। ইউজারের নাম ${firstName}। বাংলায় বা ইংরেজিতে উত্তর দাও (user যে ভাষায় লিখবে)। উত্তর সংক্ষিপ্ত ও কাজের রাখো।`;
+
+  for (const model of models) {
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://teledrive-wine.vercel.app",
+          "X-Title": "TeleDrive Bot",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 500,
+          temperature: 0.7,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+          ],
+        }),
+      });
+
+      const data = await response.json();
+      const reply = data?.choices?.[0]?.message?.content;
+      if (reply && reply.trim()) return reply.trim();
+    } catch {
+      continue;
     }
-  } catch (error) {
-    console.error("AI Error:", error);
-    return "❌ সার্ভারে সমস্যা। একটু পরে চেষ্টা করো।";
   }
+
+  return `🙏 দুঃখিত ${firstName}, এখন উত্তর দিতে পারছি না। একটু পরে চেষ্টা করো।`;
 }
 
 async function sendMessage(token, chatId, text) {
@@ -125,8 +123,8 @@ async function sendMessage(token, chatId, text) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text }),
     });
-  } catch (error) {
-    console.error("Send message error:", error);
+  } catch (e) {
+    console.error("sendMessage error:", e);
   }
 }
 
@@ -137,7 +135,7 @@ async function sendChatAction(token, chatId, action) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, action }),
     });
-  } catch (error) {
-    console.error("Chat action error:", error);
+  } catch (e) {
+    console.error("sendChatAction error:", e);
   }
 }
