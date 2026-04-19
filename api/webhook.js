@@ -17,26 +17,16 @@ export default async function handler(req, res) {
   const text = (message.text || "").trim();
   const firstName = message.from?.first_name || "বন্ধু";
 
-  // GROUP হ্যান্ডলিং
   if (chatType === "group" || chatType === "supergroup") {
     const textLower = text.toLowerCase();
     const isCommand = text.startsWith("/");
     const isMentioned = textLower.includes("@syleax_bot") || textLower.includes("syleax");
-
-    // group-এ mention বা command ছাড়া ignore করো
     if (!isCommand && !isMentioned) return res.status(200).send("ok");
-
-    // mention বাদ দিয়ে বাকি text নাও
-    const cleanText = text
-      .replace(/@syleax_bot/gi, "")
-      .replace(/syleax/gi, "")
-      .trim() || "হ্যালো";
-
+    const cleanText = text.replace(/@syleax_bot/gi, "").replace(/syleax/gi, "").trim() || "হ্যালো";
     await processMessage(BOT_TOKEN, OPENROUTER_KEY, APP_URL, chatId, cleanText, firstName);
     return res.status(200).send("ok");
   }
 
-  // PRIVATE CHAT
   await processMessage(BOT_TOKEN, OPENROUTER_KEY, APP_URL, chatId, text, firstName);
   return res.status(200).send("ok");
 }
@@ -81,13 +71,13 @@ async function getAIReply(apiKey, userMessage, firstName) {
   if (!apiKey) return "🔑 OpenRouter API key সেট নেই।";
 
   const models = [
+    "google/gemma-3-27b-it:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemma-3-12b-it:free",
     "meta-llama/llama-3.2-3b-instruct:free",
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "google/gemma-2-9b-it:free",
-    "mistralai/mistral-7b-instruct:free",
   ];
 
-  const systemPrompt = `তুমি একজন সহায়ক AI assistant। ইউজারের নাম ${firstName}। বাংলায় বা ইংরেজিতে উত্তর দাও। উত্তর সংক্ষিপ্ত রাখো।`;
+  const systemPrompt = `তুমি একজন সহায়ক AI assistant। ইউজারের নাম ${firstName}। বাংলায় বা ইংরেজিতে উত্তর দাও (user যে ভাষায় লিখবে)। উত্তর সংক্ষিপ্ত ও কাজের রাখো।`;
 
   for (const model of models) {
     try {
@@ -116,7 +106,7 @@ async function getAIReply(apiKey, userMessage, firstName) {
     } catch { continue; }
   }
 
-  return `🙏 দুঃখিত ${firstName}, এখন AI উত্তর দিতে পারছে না। একটু পরে চেষ্টা করো।`;
+  return `🙏 দুঃখিত ${firstName}, এখন AI ব্যস্ত আছে। একটু পরে চেষ্টা করো।`;
 }
 
 async function sendMessage(token, chatId, text) {
